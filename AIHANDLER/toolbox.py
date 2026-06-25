@@ -1,4 +1,4 @@
-import constants
+import constants as constants
 import requests
 import time
 
@@ -17,7 +17,7 @@ def prompt_and_check(models):
             print("退出程序。")
             exit(0)
 
-        if not is_model_supported(model_input):
+        if not is_model_supported(models, model_input):
             print(f"暂未支持 '{model_input}'。")
             # 打印带序号列表
             show_list = [f"{i}: {model}" for i, model in enumerate(models)]
@@ -44,14 +44,14 @@ def handle_input(history, user_input, ip, port):
         return 1, new_history
 
     if cmd == "/clear":
-        new_history = [new_history[0]]
+        new_history = [entry for entry in history if entry['role'] == 'system']
         print("\n已清空全部对话历史\n")
-        return 0, new_history
+        return 3, new_history
 
     elif cmd == "/history":
         print("\n=====对话历史记录=====")
-        for item in new_history:
-            print(f"{item['role']}: {item['content']}")
+        for i in range(2, len(new_history)):
+            print(f"{new_history[i]['role']}: {new_history[i]['content']}")
         print("======================\n")
         return 0, new_history
 
@@ -60,8 +60,8 @@ def handle_input(history, user_input, ip, port):
             print("\n暂无对话内容可总结\n")
             return 0, new_history
 
-        summary_text = "总结以下对话，提炼核心业务问答：\n"
-        for item in new_history[1:]:
+        summary_text = "总结以下对话，提炼核心业务问答。提炼时不要丢失重要信息（如，你回答的答案）。\n"
+        for item in new_history[2:]:
             summary_text += f"{item['role']}: {item['content']}\n"
 
         import requests

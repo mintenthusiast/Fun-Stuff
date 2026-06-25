@@ -1,8 +1,6 @@
 import requests
-import time
 import toolbox
-import resources.constants as constants
-
+import constants as constants
 
 class AIHandler:
     def __init__(self, ip, port, models, system_message):
@@ -17,7 +15,7 @@ class AIHandler:
         else:
             self.url = f"http://{self.ip}:{self.port}/v1/chat/completions"
 
-        with open("resources/init_message.md", "r", encoding="utf-8") as f:
+        with open("AIHANDLER/init_message.txt", "r", encoding="utf-8") as f:
             self.init_message = f.read()
 
         self.history = [
@@ -27,12 +25,13 @@ class AIHandler:
 
     def run(self):
 
-        toolbox.connection_check(self.url, constants.MAX_WAIT)
+        toolbox.connection_check(self.url)
         selected_model = toolbox.prompt_and_check(self.models)
 
         while True:
             try:
                 user_input = input("你：").strip()
+
                 if not user_input:
                     print("\n请输入有效内容\n")
                     continue
@@ -43,11 +42,11 @@ class AIHandler:
                     self.ip,
                     self.port
                 )
-                self.history = new_history
 
                 # 普通指令，继续循环
                 if cmd_status == 0:
                     continue
+
                 # 退出程序
                 if cmd_status == 1:
                     print("会话结束，退出程序")
@@ -55,8 +54,7 @@ class AIHandler:
 
                 # 正常对话请求
                 if cmd_status == 2:
-                    self.history.append({"role": "user", "content": user_input})
-
+                    self.history = new_history
                     payload = {
                         "model": selected_model,
                         "stream": False,
@@ -73,6 +71,10 @@ class AIHandler:
                     model_response = res_data["choices"][0]["message"]["content"]
                     self.history.append({"role": "assistant", "content": model_response})
                     print(f"\n{constants.GREEN}AI: {model_response}{constants.RESET}\n")
+
+                if cmd_status == 3:
+                    self.history = new_history
+                    continue
 
             except requests.exceptions.RequestException as e:
                 print(f"\n{constants.RED} :( 请求错误: {e}{constants.RESET}\n")
