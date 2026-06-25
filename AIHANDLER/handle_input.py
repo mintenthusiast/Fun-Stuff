@@ -1,6 +1,5 @@
 # handle_input.py
 def handle_input(user_input, history, ip, port):
-    typos = ["/hepl", "/hlep", "/hel", "/helo"]
     cmd = user_input.lower().strip()
     new_history = history.copy()
 
@@ -10,7 +9,7 @@ def handle_input(user_input, history, ip, port):
 
     if cmd == "/clear":
         new_history = [new_history[0]]
-        print("\n✅ 已清空全部对话历史\n")
+        print("\n已清空全部对话历史\n")
         return 0, new_history
 
     elif cmd == "/history":
@@ -48,15 +47,6 @@ def handle_input(user_input, history, ip, port):
     elif cmd == "/ipconfig":
         print(f"\n当前IP地址: {ip}\n当前端口号: {port}\n")
         return 0, new_history
-
-    elif cmd in typos:
-        print(
-            "\n•.,¸,.•*`•.,¸¸,.•*¯ ╭━━━━━━━━━━━╮\n"
-            "•.,¸,.•*¯`•.,¸,.•*¯.|:::::::: /___/\n"
-            "•.,¸,.•*¯`•.,¸,.•* <|:::::::(｡ ●ω●｡)\n"
-            "•.,¸,.•¯•.,¸,.•╰ * >し------し---Ｊ\n"
-        )
-        return 0, new_history
     
     elif cmd == "/help" or cmd[0] == "/":
         print("\n=====可用控制指令=====")
@@ -70,5 +60,5 @@ def handle_input(user_input, history, ip, port):
 
     # 普通提问，状态0
     new_history.append({"role": "user", "content": user_input})
-    return 0, new_history
+    return 2, new_history
 
