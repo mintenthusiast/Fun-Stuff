@@ -1,5 +1,5 @@
 # handle_input.py
-def handle_input(user_input, history, ip, port):
+def handle_input(user_input, history, ip, port, models):
     cmd = user_input.lower().strip()
     new_history = history.copy()
 
@@ -47,7 +47,7 @@ def handle_input(user_input, history, ip, port):
     elif cmd == "/ipconfig":
         print(f"\n当前IP地址: {ip}\n当前端口号: {port}\n")
         return 0, new_history
-    
+
     elif cmd == "/help" or cmd[0] == "/":
         print("\n=====可用控制指令=====")
         print("/exit      退出程序")
