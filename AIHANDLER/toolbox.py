@@ -1,134 +1,178 @@
 import constants as constants
 import requests
 import time
-
-def is_model_supported(models, input_str):
-    if input_str.isdigit():
-        idx = int(input_str)
-        return 0 <= idx < len(models)
-    else:
-        return input_str in models
-
+import streamlit as st
+import sqlite3
 
 def prompt_and_check(models):
-    while True:
-        model_input = input("\n请输入模型名称/序号: ").strip()
-        if model_input == "/exit":
-            print("退出程序。")
-            exit(0)
+    if "model_input" not in st.session_state:
+        st.session_state["model_input"] = models[0]
 
-        if not is_model_supported(models, model_input):
-            print(f"暂未支持 '{model_input}'。")
-            # 打印带序号列表
-            show_list = [f"{i}: {model}" for i, model in enumerate(models)]
-            print(f"当前支持的模型有:\n\n{'\n'.join(show_list)}")
-            continue
+    model_input = st.selectbox(
+        label="请选择一个模型",
+        options=models,
+        index=models.index(st.session_state["model_input"]),
+        key="select_box"
+    )
 
-        if model_input.isdigit():
-            select_idx = int(model_input)
-            selected_model = models[select_idx]
-            print(f"当前使用模型：{selected_model}\n输入 /help 查看全部指令\n")
-            return selected_model
-        else:
-            selected_model = model_input
-            print(f"当前使用模型：{selected_model}\n输入 /help 查看全部指令\n")
-            return selected_model
+    st.session_state["model_input"] = model_input
+    return model_input
 
-
-def handle_input(history, user_input, ip, port):
-    cmd = user_input.lower().strip()
+def handle_input(history, user_input, ip, port, chat):
+    cmd = user_input.strip().lower()
     new_history = history.copy()
 
+    # ===== EXIT =====
     if cmd == "/exit":
-        # 返回状态1：退出循环
         return 1, new_history
 
-    if cmd == "/clear":
-        new_history = [entry for entry in history if entry['role'] == 'system']
-        print("\n已清空全部对话历史\n")
+    # ===== CLEAR =====
+    elif cmd == "/clear":
+        new_history = [
+            entry for entry in history
+            if entry["role"] == "system"
+        ]
         return 3, new_history
 
-    elif cmd == "/history":
-        print("\n=====对话历史记录=====")
-        for i in range(2, len(new_history)):
-            print(f"{new_history[i]['role']}: {new_history[i]['content']}")
-        print("======================\n")
-        return 0, new_history
-
+    # ===== SUMMARISE =====
     elif cmd == "/summarise":
-        if len(new_history) <= 1:
-            print("\n暂无对话内容可总结\n")
+        if len(new_history) <= 2:
+            # 替换 new_history.append 为 update_history
+            update_history("system", "INFO: 没有历史可总结", new_history)
+            chat.info(f"INFO: 没有历史可总结")
             return 0, new_history
 
-        summary_text = "总结以下对话，提炼核心业务问答。提炼时不要丢失重要信息（如，你回答的答案）。\n"
-        for item in new_history[2:]:
-            summary_text += f"{item['role']}: {item['content']}\n"
+        summary_text = (
+            "总结以下对话，提炼核心业务问答。"
+            "提炼时不要丢失重要信息。"
+        )
 
-        import requests
+        for item in new_history[2:]:
+            summary_text += (
+                f"{item['role']}: "
+                f"{item['content']}\n"
+            )
+
         payload = {
             "model": "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
             "stream": False,
-            "messages": [{"role": "system", "content": summary_text}],
+            "messages": [
+                {
+                    "role": "system",
+                    "content": summary_text
+                }
+            ],
             "temperature": 0,
             "max_tokens": 1000
         }
-        resp = requests.post(
-            f"http://{ip}:{port}/v1/chat/completions",
-            json=payload,
-            timeout=120
-        )
-        summary = resp.json()["choices"][0]["message"]["content"]
 
-        # 精简历史：仅保留system+总结
-        new_history = [
-            new_history[0],
-            {"role": "system", "content": f"【对话总结】{summary}"}
-        ]
-        print(f"对话总结：\n{summary}\n")
-        return 0, new_history
+        try:
+            resp = requests.post(
+                f"http://{ip}:{port}/v1/chat/completions",
+                json=payload,
+                timeout=120
+            )
 
+            resp.raise_for_status()
+
+            summary = (
+                resp.json()["choices"][0]
+                ["message"]["content"]
+            )
+
+            new_history = [
+                new_history[0],
+                {
+                    "role": "system",
+                    "content": f"INFO: {summary}"
+                }
+            ]
+            return 3, new_history
+
+        except Exception as e:
+            # 替换 append
+            update_history("system", f"ERROR: 总结失败{e}", new_history)
+            return 3, new_history
+
+    # ===== IPCONFIG =====
     elif cmd == "/ipconfig":
-        print(f"\n当前IP地址: {ip}\n当前端口号: {port}\n")
-        return 0, new_history
+        # 替换 append
+        update_history("system", f"INFO: 当前IP地址: {ip} 当前端口号: {port}", new_history)
+        chat.info(f"当前IP地址: {ip} 当前端口号: {port}")
+        return 3, new_history
 
-    elif cmd == "/help" or cmd.startswith("/"):
-        print("\n=====可用控制指令=====")
-        print("/exit      退出程序")
-        print("/clear     清空对话历史")
-        print("/history   查看完整对话")
-        print("/summarise 总结对话并精简上下文")
-        print("/ipconfig  查看IP配置")
-        print("======================\n")
-        return 0, new_history
+    # ===== HELP =====
+    elif cmd == "/help":
+        help_text = (
+            "INFO:\n/help       查看帮助\n/clear      清空历史\n/summarise  总结对话\n"
+            "/ipconfig   查看配置\n/exit       退出\n/clean       清空所有历史（system在内）"
+        )
+        # 替换 append
+        update_history("system", help_text, new_history)
+        return 3, new_history
+    
+    elif cmd ==  "/clean":
+        new_history = [new_history[0], new_history[1]]
+        # 替换 append
+        update_history("system", "INFO: 已清除所有信息", new_history)
+        return 3, new_history
 
-    # 普通提问，状态2
-    new_history.append({"role": "user", "content": user_input})
+    # ===== UNKNOWN COMMAND =====
+    elif cmd.startswith("/"):
+        # 两条system提示统一调用update_history
+        update_history("system", f"WARNING: 未知命令: {cmd}", new_history)
+        update_history("system", f"INFO: 输入 /help 查看帮助", new_history)
+        return 3, new_history
+
+    # ===== NORMAL CHAT =====
+    # 用户输入消息替换append
+    update_history("user", user_input, new_history)
     return 2, new_history
 
 def connection_check(url):
-    print(f"\n{constants.YELLOW}正在检测模型服务{constants.RESET}", end="", flush=True)
+    with st.spinner("正在检测模型服务连通性...", show_time=True):
+        connected = False
+        wait_count = 0
+        
+        while wait_count < constants.MAX_WAIT:
+            try:
+                requests.get(url, timeout=1)
+                connected = True
+                break
 
-    connected = False
-    dots = ["   ", ".  ", ".. ", "..."]
-    dot_idx = 0
-    wait_count = 0
+            except Exception:
+                wait_count += 2
+                time.sleep(0.3)
+        
+        if not connected:
+            st.error("REQUEST TIMEOUT")
+            exit(1)
 
-    while not connected and wait_count < constants.MAX_WAIT:
-        try:
-            requests.get(f"{url}", timeout=1)
-            connected = True
+        st.success("连接成功！")
 
-        except Exception:
-            dot_id = (dot_idx) % len(dots)
-            print(f"\r{constants.YELLOW}正在检测模型服务{dots[dot_id]}{constants.RESET}", end="", flush=True)
+def update_history(role, content, history):
+    history.append({"role":role, "content":content})
 
-            wait_count += 0.5
-            dot_idx += 1
+    conn = sqlite3.connect(f"AIHANDLER/sqlite_history/chat.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO messages(role, content) VALUES (?, ?)",
+        (role, content)
+    )
+    conn.commit()
+    conn.close()
 
-            time.sleep(0.5)
+def init_db():
+    conn = sqlite3.connect("AIHANDLER/sqlite_history/chat.db")
+    cursor = conn.cursor()
 
-    if not connected:
-        print(f"\n{constants.RED}连接超时，服务未启动，程序退出{constants.RESET}")
-        exit(1)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL
+    )
+    """)
 
-    print(f"\n{constants.GREEN}服务连接成功。{constants.RESET}\n")
+    conn.commit()
+    conn.close()
