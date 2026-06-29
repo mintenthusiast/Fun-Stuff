@@ -5,7 +5,7 @@ import ast
 import toolbox
 import constants as constants
 
-class app:
+class app_renderer:
     def __init__(self, ip, port, system_message, init_message):
         self.settings = st.session_state
         self.ip = ip

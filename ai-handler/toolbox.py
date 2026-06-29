@@ -19,7 +19,7 @@ def prompt_and_check(models):
     st.session_state["model_input"] = model_input
     return model_input
 
-def handle_input(history, user_input, ip, port, chat):
+def handle_input(history, user_input, ip, port):
     cmd = user_input.strip().lower()
     new_history = history.copy()
 
@@ -39,7 +39,6 @@ def handle_input(history, user_input, ip, port, chat):
     elif cmd == "/summarise":
         if len(new_history) <= 2:
             update_history("system", f"WARNING: constants.SUMMARISE_WARNING_PROMPT", new_history)
-            chat.warning(f"WARNING: constants.SUMMARISE_WARNING_PROMPT")
             return 0, new_history
 
         summary_text = constants.SUMMARISE_AI_PROMPT
@@ -95,14 +94,12 @@ def handle_input(history, user_input, ip, port, chat):
     elif cmd == "/ipconfig":
         # 替换 append
         update_history("system", f"INFO: {constants.IPCONFIG_IP_PROMPT}{ip}{constants.IPCONFIG_PORT_PROMPT}{port}", new_history)
-        chat.info(f"INFO: {constants.IPCONFIG_IP_PROMPT}{ip}{constants.IPCONFIG_PORT_PROMPT}{port}")
         return 3, new_history
 
     # ===== HELP =====
     elif cmd == "/help":
         # 替换 append
         update_history("system", f"INFO: {constants.HELP_PROMPT}", new_history)
-        chat.info(f"INFO: {constants.HELP_PROMPT}")
         return 3, new_history
     
     elif cmd ==  "/clean":
@@ -114,9 +111,6 @@ def handle_input(history, user_input, ip, port, chat):
         # 两条system提示统一调用update_history
         update_history("system", f"WARNING: {constants.UNKNOWN_WARNING_PROMPT}{cmd}", new_history)
         update_history("system", f"INFO: {constants.UNKNOWN_INFO_PROMPT}", new_history)
-
-        chat.warning(f"WARNING: {constants.UNKNOWN_WARNING_PROMPT}")
-        chat.info(f"INFO: {constants.UNKNOWN_INFO_PROMPT}")
 
         return 3, new_history
 
@@ -147,6 +141,10 @@ def connection_check(url):
         st.success(constants.CONNECTION_CHECK_SUCCESS)
 
 def update_history(role, content, history, token_cost=None, streaming = False):
+
+    if content is None:
+        raise ValueError(f"content is None for role={role}")
+
     if not streaming:
         if token_cost is not None and role == "assistant":
             history.append({"role":role, "content":content, "usage":{"total_tokens":token_cost}})

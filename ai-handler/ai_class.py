@@ -1,13 +1,13 @@
 import requests
 import streamlit as st
 import json
-from app_render import app
+from app_render import app_renderer
 
 import toolbox
 import constants as constants
 
 class ai_handler:
-    def __init__(self, ip, port, selected_model, system_message, user_input, chat, settings, render: app):
+    def __init__(self, ip, port, selected_model, system_message, user_input, chat, settings, render: app_renderer):
         self.ip = ip
         self.port = port    
         self.selected_model = selected_model
@@ -28,7 +28,8 @@ class ai_handler:
 
         if self.user_input:
             model_response = self.process_requests(streaming=st.session_state.streaming)
-            toolbox.update_history("assistant", model_response, self.history, self.tokens_used)
+            if model_response is not None:
+                toolbox.update_history("assistant", model_response, self.history, self.tokens_used)
             st.session_state.chat_history = self.history
 
             st.rerun()
@@ -39,8 +40,7 @@ class ai_handler:
                 self.history,
                 self.user_input,
                 self.ip,
-                self.port,
-                self.chat
+                self.port
             )
 
             if cmd_status == 0:

@@ -1,5 +1,5 @@
 from ai_class import ai_handler
-from app_render import app
+from app_render import app_renderer
 import constants as constants
 import toolbox
 
@@ -40,7 +40,7 @@ def run_ai(ip, port, system_message, user_input, chat, settings, render, selecte
 def get_render(ip, port, system_message, init_message):
     with st.spinner(constants.RENDER_START_SPINNER, show_time=True):
         try:
-            render = app(ip, port, system_message, init_message)
+            render = app_renderer(ip, port, system_message, init_message)
             
             return render
         
@@ -65,7 +65,7 @@ def handle():
     if st.session_state.started:
         render = get_render(ip, port, system_message, init_message)
         render.startup_checks()
-        
+
         run_ai(ip, port, system_message, render.user_input, render.chat, render.settings, render, render.selected_model)
         
 def __main__():
