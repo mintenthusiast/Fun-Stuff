@@ -13,7 +13,7 @@ def prompt_and_check(models):
         label=constants.MODEL_INPUT_PROMPT,
         options=models,
         index=models.index(st.session_state["model_input"]),
-        key="select_box",
+        key="select_box"
     )
 
     st.session_state["model_input"] = model_input
@@ -192,3 +192,11 @@ def write_to_db(role, content):
     )
     conn.commit()
     conn.close()
+
+def get_url(ip, port):
+    if (ip == "test" and port == "test"):
+        url = "https://google.com"
+    else:
+        url = f"http://{ip}:{port}/v1/chat/completions"
+
+    return url
