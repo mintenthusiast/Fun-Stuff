@@ -1,0 +1,2 @@
+nohup mlx_lm.generate --model mlx-community/Qwen3-8B-4bit --prompt "test"
+

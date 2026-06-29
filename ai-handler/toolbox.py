@@ -1,7 +1,8 @@
 import constants as constants
+import streamlit as st
+
 import requests
 import time
-import streamlit as st
 import sqlite3
 
 def prompt_and_check(models):
@@ -9,10 +10,10 @@ def prompt_and_check(models):
         st.session_state["model_input"] = models[0]
 
     model_input = st.selectbox(
-        label="请选择一个模型",
+        label=constants.MODEL_INPUT_PROMPT,
         options=models,
         index=models.index(st.session_state["model_input"]),
-        key="select_box"
+        key="select_box",
     )
 
     st.session_state["model_input"] = model_input
@@ -37,15 +38,11 @@ def handle_input(history, user_input, ip, port, chat):
     # ===== SUMMARISE =====
     elif cmd == "/summarise":
         if len(new_history) <= 2:
-            # 替换 new_history.append 为 update_history
-            update_history("system", "INFO: 没有历史可总结", new_history)
-            chat.info(f"INFO: 没有历史可总结")
+            update_history("system", f"WARNING: constants.SUMMARISE_WARNING_PROMPT", new_history)
+            chat.warning(f"WARNING: constants.SUMMARISE_WARNING_PROMPT")
             return 0, new_history
 
-        summary_text = (
-            "总结以下对话，提炼核心业务问答。"
-            "提炼时不要丢失重要信息。"
-        )
+        summary_text = constants.SUMMARISE_AI_PROMPT
 
         for item in new_history[2:]:
             summary_text += (
@@ -63,7 +60,7 @@ def handle_input(history, user_input, ip, port, chat):
                 }
             ],
             "temperature": 0,
-            "max_tokens": 1000
+            "max_tokens": 2000
         }
 
         try:
@@ -91,37 +88,36 @@ def handle_input(history, user_input, ip, port, chat):
 
         except Exception as e:
             # 替换 append
-            update_history("system", f"ERROR: 总结失败{e}", new_history)
+            update_history("system", f"ERROR: {constants.SUMMARISE_ERROR_PROMPT}{e}", new_history)
             return 3, new_history
 
     # ===== IPCONFIG =====
     elif cmd == "/ipconfig":
         # 替换 append
-        update_history("system", f"INFO: 当前IP地址: {ip} 当前端口号: {port}", new_history)
-        chat.info(f"当前IP地址: {ip} 当前端口号: {port}")
+        update_history("system", f"INFO: {constants.IPCONFIG_IP_PROMPT}{ip}{constants.IPCONFIG_PORT_PROMPT}{port}", new_history)
+        chat.info(f"INFO: {constants.IPCONFIG_IP_PROMPT}{ip}{constants.IPCONFIG_PORT_PROMPT}{port}")
         return 3, new_history
 
     # ===== HELP =====
     elif cmd == "/help":
-        help_text = (
-            "INFO:\n/help       查看帮助\n/clear      清空历史\n/summarise  总结对话\n"
-            "/ipconfig   查看配置\n/exit       退出\n/clean       清空所有历史（system在内）"
-        )
         # 替换 append
-        update_history("system", help_text, new_history)
+        update_history("system", f"INFO: {constants.HELP_PROMPT}", new_history)
+        chat.info(f"INFO: {constants.HELP_PROMPT}")
         return 3, new_history
     
     elif cmd ==  "/clean":
         new_history = [new_history[0], new_history[1]]
-        # 替换 append
-        update_history("system", "INFO: 已清除所有信息", new_history)
         return 3, new_history
 
     # ===== UNKNOWN COMMAND =====
     elif cmd.startswith("/"):
         # 两条system提示统一调用update_history
-        update_history("system", f"WARNING: 未知命令: {cmd}", new_history)
-        update_history("system", f"INFO: 输入 /help 查看帮助", new_history)
+        update_history("system", f"WARNING: {constants.UNKNOWN_WARNING_PROMPT}{cmd}", new_history)
+        update_history("system", f"INFO: {constants.UNKNOWN_INFO_PROMPT}", new_history)
+
+        chat.warning(f"WARNING: {constants.UNKNOWN_WARNING_PROMPT}")
+        chat.info(f"INFO: {constants.UNKNOWN_INFO_PROMPT}")
+
         return 3, new_history
 
     # ===== NORMAL CHAT =====
@@ -130,7 +126,7 @@ def handle_input(history, user_input, ip, port, chat):
     return 2, new_history
 
 def connection_check(url):
-    with st.spinner("正在检测模型服务连通性...", show_time=True):
+    with st.spinner(constants.CONNECTION_CHECK_SPINNER, show_time=True):
         connected = False
         wait_count = 0
         
@@ -145,25 +141,28 @@ def connection_check(url):
                 time.sleep(0.3)
         
         if not connected:
-            st.error("REQUEST TIMEOUT")
-            exit(1)
+            st.error(constants.CONNECTION_CHECK_TIMEOUT)
+            st.stop()
 
-        st.success("连接成功！")
+        st.success(constants.CONNECTION_CHECK_SUCCESS)
 
-def update_history(role, content, history):
-    history.append({"role":role, "content":content})
+def update_history(role, content, history, token_cost=None, streaming = False):
+    if not streaming:
+        if token_cost is not None and role == "assistant":
+            history.append({"role":role, "content":content, "usage":{"total_tokens":token_cost}})
+        else:
+            history.append({"role":role, "content":content})
 
-    conn = sqlite3.connect(f"AIHANDLER/sqlite_history/chat.db")
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO messages(role, content) VALUES (?, ?)",
-        (role, content)
-    )
-    conn.commit()
-    conn.close()
+        write_to_db(role, content)
+
+    else:
+        if token_cost is not None and role == "assistant":
+            history[-1] = ({"role":role, "content":content, "usage":{"total_tokens":token_cost}})
+        else:
+            history[-1] = ({"role":role, "content":content})
 
 def init_db():
-    conn = sqlite3.connect("AIHANDLER/sqlite_history/chat.db")
+    conn = sqlite3.connect(constants.DATABASE_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -174,5 +173,22 @@ def init_db():
     )
     """)
 
+    conn.commit()
+    conn.close()
+
+def package_data(data):
+    out = ""
+    for object in data[2:]:
+        out += f"{object}\n"
+
+    return out
+
+def write_to_db(role, content):
+    conn = sqlite3.connect(constants.DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO messages(role, content) VALUES (?, ?)",
+        (role, content)
+    )
     conn.commit()
     conn.close()
